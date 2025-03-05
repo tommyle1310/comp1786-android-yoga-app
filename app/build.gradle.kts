@@ -2,7 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    id("kotlin-kapt") // Thêm plugin KAPT
+    id("kotlin-kapt") // Đã có KAPT
 }
 
 android {
@@ -41,6 +41,9 @@ android {
 }
 
 dependencies {
+    implementation(libs.retrofit)                 // Thêm Retrofit
+    implementation(libs.retrofit.converter.gson)  // Thêm Gson Converter
+    implementation(libs.okhttp)                   // Thêm OkHttp
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -53,7 +56,7 @@ dependencies {
     // Room dependencies
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
-    kapt(libs.androidx.room.compiler) // Thêm KAPT cho Room compiler
+    kapt(libs.androidx.room.compiler)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
