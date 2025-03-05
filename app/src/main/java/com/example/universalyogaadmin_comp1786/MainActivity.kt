@@ -2,8 +2,11 @@ package com.example.universalyogaadmin_comp1786
 
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -26,13 +29,15 @@ import com.example.universalyogaadmin_comp1786.data.Instance
 import com.example.universalyogaadmin_comp1786.data.ApiService
 import com.example.universalyogaadmin_comp1786.data.UploadData
 import com.example.universalyogaadmin_comp1786.ui.theme.UniversalYogaAdminCOMP1786Theme
-import kotlinx.coroutines.flow.first // Thêm import
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import androidx.compose.ui.res.painterResource
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,8 +51,15 @@ class MainActivity : ComponentActivity() {
                 val courses by courseDao.getAllCourses().collectAsState(initial = emptyList())
                 var screenState by remember { mutableStateOf("Courses") }
 
+                LaunchedEffect(courses) {
+                    Log.d("MainActivity", "Courses updated: $courses")
+                }
+
+                Log.d("MainActivity", "Rendering screenState: $screenState with courses: $courses")
+
                 when (screenState) {
                     "Courses" -> CourseScreen(courseDao, courses) { screenState = it }
+                    "CoursesList" -> CoursesListScreen(courses) { screenState = "Courses" }
                     "Search" -> SearchScreen(courseDao) { screenState = "Courses" }
                 }
             }
@@ -74,6 +86,8 @@ fun CourseScreen(
     var selectedCourse by remember { mutableStateOf<Course?>(null) }
     val instances by (selectedCourse?.let { courseDao.getInstancesForCourse(it.id) } ?: flowOf(emptyList())).collectAsState(initial = emptyList())
 
+    Log.d("CourseScreen", "Rendering CourseScreen with courses: $courses")
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = { TopAppBar(title = { Text(if (selectedCourse == null) "Yoga Courses" else "Instances for ${selectedCourse?.type}") }) }
@@ -83,10 +97,9 @@ fun CourseScreen(
                 modifier = Modifier
                     .padding(paddingValues)
                     .padding(16.dp)
-                    .fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
             ) {
-                // Form nhập liệu
                 val days = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
                 var expandedDay by remember { mutableStateOf(false) }
                 ExposedDropdownMenuBox(
@@ -174,53 +187,34 @@ fun CourseScreen(
                     Text("Save")
                 }
 
-                LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(courses) { course ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("${course.day} ${course.time} - ${course.type} (£${course.price})")
-                            Row {
-                                Button(onClick = { scope.launch { courseDao.delete(course) } }) { Text("Delete") }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Button(onClick = {
-                                    val intent = Intent(context, ConfirmActivity::class.java).apply {
-                                        putExtra("DAY", course.day)
-                                        putExtra("TIME", course.time)
-                                        putExtra("CAPACITY", course.capacity)
-                                        putExtra("DURATION", course.duration)
-                                        putExtra("PRICE", course.price)
-                                        putExtra("TYPE", course.type)
-                                        putExtra("DESC", course.description)
-                                    }
-                                    context.startActivity(intent)
-                                }) { Text("Edit") }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Button(onClick = { selectedCourse = course }) { Text("Instances") }
-                            }
-                        }
-                    }
+                Button(onClick = { onScreenChange("CoursesList") }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                    Text("View Courses List")
                 }
-
                 Button(onClick = { onScreenChange("Search") }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                     Text("Search Instances")
                 }
-
                 Button(
                     onClick = {
                         scope.launch {
                             val networkAvailable = isNetworkAvailable(context)
                             if (networkAvailable) {
-                                val retrofit = Retrofit.Builder()
-                                    .baseUrl("https://your-neondb-api.com/")
-                                    .addConverterFactory(GsonConverterFactory.create())
-                                    .build()
-                                val service = retrofit.create(ApiService::class.java)
-                                val allInstances = courses.flatMap { course -> courseDao.getInstancesForCourse(course.id).first() }
-                                val data = UploadData(courses, allInstances)
-                                service.uploadData(data)
-                                android.widget.Toast.makeText(context, "Uploaded!", android.widget.Toast.LENGTH_SHORT).show()
+                                try {
+                                    val retrofit = Retrofit.Builder()
+                                        .baseUrl("https://your-api-endpoint.com/")
+                                        .addConverterFactory(GsonConverterFactory.create())
+                                        .build()
+                                    val service = retrofit.create(ApiService::class.java)
+                                    val allInstances = courses.flatMap { course -> courseDao.getInstancesForCourse(course.id).first() }
+                                    val data = UploadData(courses, allInstances)
+                                    val response = service.uploadData(data)
+                                    if (response.isSuccessful) {
+                                        android.widget.Toast.makeText(context, "Uploaded!", android.widget.Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        android.widget.Toast.makeText(context, "Upload failed: ${response.code()}", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                } catch (e: Exception) {
+                                    android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                }
                             } else {
                                 android.widget.Toast.makeText(context, "No network!", android.widget.Toast.LENGTH_SHORT).show()
                             }
@@ -230,8 +224,12 @@ fun CourseScreen(
                 ) {
                     Text("Upload to Cloud")
                 }
-
-                Button(onClick = { scope.launch { courseDao.resetDatabase() } }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                Button(
+                    onClick = { scope.launch { courseDao.resetDatabase() } },
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(bottom = 8.dp)
+                ) {
                     Text("Reset Database")
                 }
             }
@@ -257,7 +255,7 @@ fun InstanceScreen(
     var photoUri by remember { mutableStateOf<Uri?>(null) }
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         if (success) {
-            photoUri = Uri.parse("file://temp_photo.jpg") // Placeholder
+            photoUri = Uri.parse("file://temp_photo.jpg")
         }
     }
 
@@ -290,7 +288,7 @@ fun InstanceScreen(
 
         Button(
             onClick = {
-                val tempUri = Uri.parse("file://temp_photo.jpg") // Placeholder
+                val tempUri = Uri.parse("file://temp_photo.jpg")
                 cameraLauncher.launch(tempUri)
             },
             modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -359,6 +357,48 @@ fun SearchScreen(courseDao: com.example.universalyogaadmin_comp1786.data.CourseD
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CoursesListScreen(courses: List<Course>, onBack: () -> Unit) {
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("Courses List") }) }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .padding(paddingValues)
+                .fillMaxSize()
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                items(courses) { course ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("${course.day} ${course.time} - ${course.type} (£${course.price})")
+                    }
+                }
+            }
+            Button(
+                onClick = onBack,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(bottom = 8.dp)
+            ) {
+                Text("Back to Courses")
+            }
+        }
+    }
+}
+
 fun isNetworkAvailable(context: Context): Boolean {
-    return true // Placeholder
+    val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val network = connectivityManager.activeNetwork ?: return false
+    val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
 }

@@ -1,6 +1,7 @@
 package com.example.universalyogaadmin_comp1786
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -74,13 +75,18 @@ class ConfirmActivity : ComponentActivity() {
                                 type = type,
                                 description = desc
                             )
-                            courseDao.insert(course)
-                            android.widget.Toast.makeText(context, "Course saved!", android.widget.Toast.LENGTH_SHORT).show()
+                            Log.d("ConfirmActivity", "Attempting to save course: $course")
+                            try {
+                                courseDao.insert(course)
+                                Log.d("ConfirmActivity", "Course inserted successfully")
+                                android.widget.Toast.makeText(context, "Course saved!", android.widget.Toast.LENGTH_SHORT).show()
+                            } catch (e: Exception) {
+                                Log.e("ConfirmActivity", "Failed to insert course: ${e.message}", e)
+                                android.widget.Toast.makeText(context, "Failed to save course!", android.widget.Toast.LENGTH_SHORT).show()
+                            }
                             finish()
                         }
-                    }) {
-                        Text("Confirm")
-                    }
+                    }) { Text("Confirm") }
                     Button(onClick = { finish() }) {
                         Text("Edit")
                     }
